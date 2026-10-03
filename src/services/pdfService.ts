@@ -1,0 +1,811 @@
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import QRCode from 'qrcode';
+import { db } from '../database/db';
+import { TransactionWithDetails, Member, Book, Settings } from '../types';
+
+export class PdfService {
+  private getSettings(): Settings {
+    return db.getSettings();
+  }
+
+  /**
+   * Helper to draw official school letterhead (Kop Surat) on PDF documents
+   */
+  private drawHeader(doc: jsPDF, title: string, subtitle?: string) {
+    const settings = this.getSettings();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // School Name
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.text(settings.nama_sekolah.toUpperCase(), pageWidth / 2, 14, { align: 'center' });
+
+    // Library Name
+    doc.setFontSize(11);
+    doc.setTextColor(30, 64, 175); // blue-800
+    doc.text(settings.nama_perpustakaan.toUpperCase(), pageWidth / 2, 20, { align: 'center' });
+
+    // Address & Contact
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text(`${settings.alamat} • Telp: ${settings.telepon} • Email: ${settings.email}`, pageWidth / 2, 25, {
+      align: 'center'
+    });
+
+    // Double dividing lines
+    doc.setDrawColor(30, 41, 59); // slate-800
+    doc.setLineWidth(0.8);
+    doc.line(14, 28, pageWidth - 14, 28);
+    doc.setLineWidth(0.2);
+    doc.line(14, 29.2, pageWidth - 14, 29.2);
+
+    // Document Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text(title.toUpperCase(), pageWidth / 2, 36, { align: 'center' });
+
+    if (subtitle) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(71, 85, 105);
+      doc.text(subtitle, pageWidth / 2, 41, { align: 'center' });
+    }
+  }
+
+  /**
+   * Helper to draw official signature block at the bottom
+   */
+  private drawSignatures(doc: jsPDF, startY: number) {
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    // Check if we need a new page for signatures
+    if (startY + 45 > pageHeight - 15) {
+      doc.addPage();
+      startY = 20;
+    }
+
+    const todayStr = new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' }).format(new Date());
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(51, 65, 85);
+
+    // Left signature: Kepala Sekolah
+    const leftX = 35;
+    doc.text('Mengetahui,', leftX, startY, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text('Kepala Sekolah', leftX, startY + 5, { align: 'center' });
+
+    doc.text('Drs. H. Mulyadi, M.Pd', leftX, startY + 28, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text('NIP. 19740512 199803 1 002', leftX, startY + 32, { align: 'center' });
+
+    // Right signature: Kepala Perpustakaan
+    const rightX = pageWidth - 45;
+    doc.setFontSize(8.5);
+    doc.text(`Jakarta, ${todayStr}`, rightX, startY, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text('Kepala Perpustakaan', rightX, startY + 5, { align: 'center' });
+
+    doc.text('Bambang Sudarsono, S.Pd', rightX, startY + 28, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text('NIP. 19820415 200604 1 008', rightX, startY + 32, { align: 'center' });
+  }
+
+  /**
+   * Universal Table Export to PDF
+   */
+  exportTable({
+    title,
+    subtitle,
+    headers,
+    data,
+    filename,
+    orientation = 'portrait',
+    includeSignatures = true
+  }: {
+    title: string;
+    subtitle?: string;
+    headers: string[];
+    data: (string | number)[][];
+    filename: string;
+    orientation?: 'portrait' | 'landscape';
+    includeSignatures?: boolean;
+  }) {
+    const doc = new jsPDF({
+      orientation,
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    this.drawHeader(doc, title, subtitle);
+
+    const startY = subtitle ? 45 : 40;
+
+    autoTable(doc, {
+      head: [headers],
+      body: data,
+      startY,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [30, 64, 175], // blue-800
+        textColor: 255,
+        fontSize: 8,
+        fontStyle: 'bold',
+        halign: 'left'
+      },
+      bodyStyles: {
+        fontSize: 7.5,
+        textColor: [30, 41, 59],
+        cellPadding: 2
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252] // slate-50
+      },
+      margin: { left: 14, right: 14 },
+      didDrawPage: dataArg => {
+        // Footer page numbering
+        const pageCount = (doc.internal as unknown as { getNumberOfPages: () => number }).getNumberOfPages();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(148, 163, 184);
+        doc.text(
+          `Dokumen dicetak otomatis oleh Sistem Perpustakaan Sekolah pada ${new Date().toLocaleString('id-ID')}`,
+          14,
+          pageHeight - 6
+        );
+        doc.text(`Halaman ${dataArg.pageNumber} dari ${pageCount}`, pageWidth - 14, pageHeight - 6, {
+          align: 'right'
+        });
+      }
+    });
+
+    const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || startY + 40;
+
+    if (includeSignatures) {
+      this.drawSignatures(doc, finalY + 10);
+    }
+
+    doc.save(`${filename}.pdf`);
+  }
+
+  /**
+   * Export Bukti Peminjaman (Receipt / Struk Peminjaman) to PDF
+   */
+  async exportBuktiPeminjaman(transaction: TransactionWithDetails) {
+    const settings = this.getSettings();
+    // A6 size receipt slip (105mm x 148mm)
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [105, 170]
+    });
+
+    const pageWidth = 105;
+
+    // Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text(settings.nama_sekolah.toUpperCase(), pageWidth / 2, 10, { align: 'center' });
+
+    doc.setFontSize(8.5);
+    doc.setTextColor(30, 64, 175);
+    doc.text(settings.nama_perpustakaan.toUpperCase(), pageWidth / 2, 14, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(settings.alamat, pageWidth / 2, 18, { align: 'center' });
+
+    // Dashed divider
+    doc.setDrawColor(148, 163, 184);
+    doc.setLineDashPattern([1, 1], 0);
+    doc.line(8, 21, pageWidth - 8, 21);
+    doc.setLineDashPattern([], 0); // reset
+
+    // Badge
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(pageWidth / 2 - 25, 23, 50, 6, 1.5, 1.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('BUKTI PEMINJAMAN BUKU', pageWidth / 2, 27.2, { align: 'center' });
+
+    // Meta details
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(71, 85, 105);
+
+    let y = 35;
+    const drawRow = (label: string, value: string, isBoldVal = false, valColor?: number[]) => {
+      doc.text(label, 8, y);
+      doc.text(':', 30, y);
+      if (isBoldVal) doc.setFont('helvetica', 'bold');
+      if (valColor) doc.setTextColor(valColor[0], valColor[1], valColor[2]);
+      doc.text(value, 33, y);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      y += 4.5;
+    };
+
+    drawRow('Kode Transaksi', transaction.kode_transaksi, true, [30, 64, 175]);
+    drawRow('Nama Siswa', transaction.anggota?.nama || '-', true);
+    drawRow('NIS / Kelas', `${transaction.anggota?.nis || '-'} / ${transaction.anggota?.kelas || '-'}`);
+    drawRow('Tgl Pinjam', transaction.tanggal_pinjam);
+    drawRow('Jatuh Tempo', transaction.tanggal_jatuh_tempo, true, [225, 29, 72]); // rose-600
+    drawRow('Petugas', transaction.petugas?.nama || 'Petugas');
+
+    // Table of books
+    const bookHeaders = ['No', 'Kode', 'Judul Buku', 'Rak'];
+    const bookRows = transaction.details.map((d, index) => [
+      index + 1,
+      d.buku?.kode_buku || '-',
+      d.buku?.judul || '-',
+      d.buku?.rak || '-'
+    ]);
+
+    autoTable(doc, {
+      head: [bookHeaders],
+      body: bookRows,
+      startY: y + 2,
+      margin: { left: 8, right: 8 },
+      theme: 'grid',
+      headStyles: {
+        fillColor: [30, 64, 175],
+        textColor: 255,
+        fontSize: 6.5,
+        fontStyle: 'bold',
+        cellPadding: 1.5
+      },
+      bodyStyles: {
+        fontSize: 6.5,
+        textColor: [30, 41, 59],
+        cellPadding: 1.5
+      }
+    });
+
+    const afterTableY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || y + 25;
+
+    // Generate QR code as data URL
+    try {
+      const qrDataUrl = await QRCode.toDataURL(transaction.kode_transaksi, {
+        margin: 1,
+        width: 120
+      });
+      doc.addImage(qrDataUrl, 'PNG', pageWidth / 2 - 12, afterTableY + 4, 24, 24);
+    } catch {
+      // Ignore image error fallback
+    }
+
+    // Message
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(6);
+    doc.setTextColor(100, 116, 139);
+    doc.text(
+      'Harap merawat buku dan mengembalikannya tepat waktu.',
+      pageWidth / 2,
+      afterTableY + 32,
+      { align: 'center' }
+    );
+    doc.text(
+      `Denda keterlambatan: Rp ${settings.denda_per_hari.toLocaleString('id-ID')}/hari/buku.`,
+      pageWidth / 2,
+      afterTableY + 35.5,
+      { align: 'center' }
+    );
+
+    doc.save(`bukti_pinjam_${transaction.kode_transaksi}.pdf`);
+  }
+
+  /**
+   * Export Kartu Anggota Siswa to PDF (CR80 standard ratio or printable card page)
+   */
+  async exportKartuAnggota(member: Member) {
+    const settings = this.getSettings();
+    // Card size: 85.6mm x 54mm (CR80 Standard ID Card)
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: [54, 85.6]
+    });
+
+    const cardW = 85.6;
+    const cardH = 54;
+
+    // Background
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, cardW, cardH, 'F');
+
+    // Header gradient stripe
+    doc.setFillColor(30, 64, 175); // blue-800
+    doc.rect(0, 0, cardW, 2.5, 'F');
+
+    // Header title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(30, 64, 175);
+    doc.text(settings.nama_sekolah.toUpperCase(), cardW / 2, 6, { align: 'center' });
+
+    doc.setFontSize(5.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(settings.nama_perpustakaan.toUpperCase(), cardW / 2, 8.8, { align: 'center' });
+
+    doc.setFontSize(5);
+    doc.setTextColor(71, 85, 105);
+    doc.text('KARTU ANGGOTA PERPUSTAKAAN', cardW / 2, 11.2, { align: 'center' });
+
+    doc.setDrawColor(203, 213, 225); // slate-300
+    doc.setLineWidth(0.2);
+    doc.line(4, 13, cardW - 4, 13);
+
+    // Photo placeholder / image
+    const photoX = 5;
+    const photoY = 16;
+    const photoW = 16;
+    const photoH = 22;
+
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(photoX, photoY, photoW, photoH, 1, 1, 'FD');
+
+    try {
+      if (member.foto && member.foto.startsWith('http')) {
+        // Can add image if loaded, or draw photo frame
+      }
+    } catch {
+      // fallback
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(5.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text('FOTO', photoX + photoW / 2, photoY + photoH / 2, { align: 'center' });
+
+    // Member Details
+    const textX = 24;
+    let detailY = 18;
+
+    const printField = (label: string, val: string, isBold = false, isMono = false) => {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(5.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(label, textX, detailY);
+      doc.text(':', textX + 11, detailY);
+
+      if (isMono) doc.setFont('courier', 'bold');
+      else if (isBold) doc.setFont('helvetica', 'bold');
+      doc.setTextColor(15, 23, 42);
+      doc.text(val, textX + 13, detailY);
+      detailY += 4.5;
+    };
+
+    printField('Nama', member.nama.length > 20 ? member.nama.substring(0, 19) + '...' : member.nama, true);
+    printField('NIS', member.nis);
+    printField('Kelas', member.kelas);
+    printField('Kode', member.kode_anggota, true, true);
+
+    // QR Code
+    try {
+      const qrDataUrl = await QRCode.toDataURL(member.qr_token || member.kode_anggota, {
+        margin: 1,
+        width: 100
+      });
+      doc.addImage(qrDataUrl, 'PNG', cardW - 22, 17, 18, 18);
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(4.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text('SCAN ME', cardW - 13, 37, { align: 'center' });
+    } catch {
+      // fallback
+    }
+
+    // Card Footer
+    doc.setDrawColor(226, 232, 240);
+    doc.line(4, 46, cardW - 4, 46);
+
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(4.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text('Kartu ini wajib dibawa saat meminjam buku', 5, 49.5);
+    doc.text('Berlaku Selama Menjadi Siswa', cardW - 5, 49.5, { align: 'right' });
+
+    doc.save(`kartu_anggota_${member.kode_anggota}.pdf`);
+  }
+
+  /**
+   * Export Label Buku to PDF (standard spine/pocket sticker format)
+   */
+  async exportLabelBuku(book: Book) {
+    const settings = this.getSettings();
+    // 70mm x 50mm sticker size
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: [50, 70]
+    });
+
+    const w = 70;
+    const h = 50;
+
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(2, 2, w - 4, h - 4, 2, 2);
+
+    // Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(30, 64, 175);
+    doc.text(settings.nama_perpustakaan.toUpperCase(), w / 2, 7, { align: 'center' });
+
+    doc.setFontSize(5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(settings.nama_sekolah.toUpperCase(), w / 2, 10, { align: 'center' });
+
+    doc.setLineDashPattern([1, 1], 0);
+    doc.line(5, 12, w - 5, 12);
+    doc.setLineDashPattern([], 0);
+
+    // QR Code
+    try {
+      const qrDataUrl = await QRCode.toDataURL(book.qr_token || book.kode_buku, {
+        margin: 1,
+        width: 90
+      });
+      doc.addImage(qrDataUrl, 'PNG', w / 2 - 10, 14, 20, 20);
+    } catch {
+      // ignore
+    }
+
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(book.kode_buku, w / 2, 38, { align: 'center' });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6);
+    doc.text(book.judul.length > 28 ? book.judul.substring(0, 26) + '...' : book.judul, w / 2, 42, {
+      align: 'center'
+    });
+
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(w / 2 - 16, 44, 32, 4, 1, 1, 'F');
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(5.5);
+    doc.setTextColor(30, 64, 175);
+    doc.text(`RAK: ${book.rak}`, w / 2, 47, { align: 'center' });
+
+    doc.save(`label_buku_${book.kode_buku}.pdf`);
+  }
+
+  /**
+   * Export Bukti Pengembalian Buku to PDF
+   */
+  async exportBuktiPengembalian(receipt: {
+    member: Member;
+    petugasName: string;
+    items: {
+      buku: Book;
+      kodeTransaksi: string;
+      tanggalPinjam: string;
+      tanggalKembali: string;
+      kondisi: string;
+      denda: number;
+    }[];
+    totalDenda: number;
+    tanggalKembali: string;
+  }) {
+    const settings = this.getSettings();
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [105, 175]
+    });
+
+    const pageWidth = 105;
+    const returnCode = `KMB-${Date.now().toString().slice(-6)}`;
+
+    // Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text(settings.nama_sekolah.toUpperCase(), pageWidth / 2, 10, { align: 'center' });
+
+    doc.setFontSize(8.5);
+    doc.setTextColor(30, 64, 175);
+    doc.text(settings.nama_perpustakaan.toUpperCase(), pageWidth / 2, 14, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(settings.alamat, pageWidth / 2, 18, { align: 'center' });
+
+    // Dashed divider
+    doc.setDrawColor(148, 163, 184);
+    doc.setLineDashPattern([1, 1], 0);
+    doc.line(8, 21, pageWidth - 8, 21);
+    doc.setLineDashPattern([], 0);
+
+    // Badge
+    doc.setFillColor(236, 253, 245);
+    doc.roundedRect(pageWidth / 2 - 28, 23, 56, 6, 1.5, 1.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(6, 95, 70);
+    doc.text('BUKTI PENGEMBALIAN BUKU', pageWidth / 2, 27.2, { align: 'center' });
+
+    let y = 35;
+    const drawRow = (label: string, value: string, isBold = false) => {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(71, 85, 105);
+      doc.text(label, 8, y);
+      doc.text(':', 30, y);
+      if (isBold) doc.setFont('helvetica', 'bold');
+      doc.setTextColor(15, 23, 42);
+      doc.text(value, 33, y);
+      y += 4.5;
+    };
+
+    drawRow('No. Bukti Kembali', returnCode, true);
+    drawRow('Nama Siswa', receipt.member.nama, true);
+    drawRow('NIS / Kelas', `${receipt.member.nis} / ${receipt.member.kelas}`);
+    drawRow('Tgl Kembali', receipt.tanggalKembali);
+    drawRow('Petugas', receipt.petugasName);
+
+    const headers = ['No', 'Judul Buku', 'Kondisi', 'Denda'];
+    const rows = receipt.items.map((it, idx) => [
+      idx + 1,
+      it.buku.judul.length > 22 ? it.buku.judul.substring(0, 20) + '...' : it.buku.judul,
+      it.kondisi,
+      it.denda > 0 ? `Rp ${it.denda.toLocaleString('id-ID')}` : 'Rp 0'
+    ]);
+
+    autoTable(doc, {
+      head: [headers],
+      body: rows,
+      startY: y + 2,
+      margin: { left: 8, right: 8 },
+      theme: 'grid',
+      headStyles: {
+        fillColor: [5, 150, 105], // emerald-600
+        textColor: 255,
+        fontSize: 6.5,
+        fontStyle: 'bold',
+        cellPadding: 1.5
+      },
+      bodyStyles: {
+        fontSize: 6.5,
+        textColor: [30, 41, 59],
+        cellPadding: 1.5
+      }
+    });
+
+    const afterTableY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || y + 25;
+
+    // Total denda box
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('Total Denda:', 8, afterTableY + 5);
+    const dendaText = receipt.totalDenda > 0 ? `Rp ${receipt.totalDenda.toLocaleString('id-ID')}` : 'Rp 0 (Lunas)';
+    doc.setTextColor(receipt.totalDenda > 0 ? 225 : 5, receipt.totalDenda > 0 ? 29 : 150, receipt.totalDenda > 0 ? 72 : 105);
+    doc.text(dendaText, pageWidth - 8, afterTableY + 5, { align: 'right' });
+
+    try {
+      const qrDataUrl = await QRCode.toDataURL(returnCode, { margin: 1, width: 100 });
+      doc.addImage(qrDataUrl, 'PNG', pageWidth / 2 - 11, afterTableY + 8, 22, 22);
+    } catch {
+      // ignore
+    }
+
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(6);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Buku telah dikembalikan dan diverifikasi oleh petugas.', pageWidth / 2, afterTableY + 34, { align: 'center' });
+    doc.text(`Dicetak pada ${new Date().toLocaleString('id-ID')}`, pageWidth / 2, afterTableY + 38, { align: 'center' });
+
+    doc.save(`bukti_kembali_${returnCode}.pdf`);
+  }
+
+  /**
+   * Export Sheet of Multiple Book Labels (e.g. 8 labels per A4 page)
+   */
+  async exportBatchLabels(books: Book[]) {
+    const settings = this.getSettings();
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const cols = 2;
+    const rows = 4;
+    const labelW = 90;
+    const labelH = 62;
+    const startX = 12;
+    const startY = 12;
+    const gapX = 6;
+    const gapY = 6;
+
+    let index = 0;
+    for (const book of books) {
+      if (index > 0 && index % (cols * rows) === 0) {
+        doc.addPage();
+      }
+      const pageIndex = index % (cols * rows);
+      const col = pageIndex % cols;
+      const row = Math.floor(pageIndex / cols);
+
+      const x = startX + col * (labelW + gapX);
+      const y = startY + row * (labelH + gapY);
+
+      // Label border
+      doc.setDrawColor(203, 213, 225);
+      doc.roundedRect(x, y, labelW, labelH, 2, 2);
+
+      // Header
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.5);
+      doc.setTextColor(30, 64, 175);
+      doc.text(settings.nama_perpustakaan.toUpperCase(), x + labelW / 2, y + 5.5, { align: 'center' });
+
+      doc.setFontSize(5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(settings.nama_sekolah.toUpperCase(), x + labelW / 2, y + 8.5, { align: 'center' });
+
+      // QR Code
+      try {
+        const qr = await QRCode.toDataURL(book.qr_token || book.kode_buku, { margin: 1, width: 80 });
+        doc.addImage(qr, 'PNG', x + labelW / 2 - 11, y + 11, 22, 22);
+      } catch {
+        // ignore
+      }
+
+      // Code
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(book.kode_buku, x + labelW / 2, y + 37.5, { align: 'center' });
+
+      // Title & Rack
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6);
+      doc.text(book.judul.length > 34 ? book.judul.substring(0, 32) + '...' : book.judul, x + labelW / 2, y + 42, { align: 'center' });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(5.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(book.penulis.length > 34 ? book.penulis.substring(0, 32) + '...' : book.penulis, x + labelW / 2, y + 45.5, { align: 'center' });
+
+      doc.setFillColor(241, 245, 249);
+      doc.roundedRect(x + labelW / 2 - 18, y + 48, 36, 4.5, 1, 1, 'F');
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(5.5);
+      doc.setTextColor(30, 64, 175);
+      doc.text(`RAK: ${book.rak}`, x + labelW / 2, y + 51.5, { align: 'center' });
+
+      index++;
+    }
+
+    doc.save(`koleksi_label_buku_${new Date().toISOString().split('T')[0]}.pdf`);
+  }
+
+  /**
+   * Export Sheet of Multiple Student Cards (e.g. 4 cards per A4 page)
+   */
+  async exportBatchKartuAnggota(members: Member[]) {
+    const settings = this.getSettings();
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const cardW = 86;
+    const cardH = 54;
+    const startX = 14;
+    const startY = 16;
+    const gapX = 10;
+    const gapY = 14;
+    const cols = 2;
+    const rows = 4; // 8 cards per A4
+
+    let index = 0;
+    for (const member of members) {
+      if (index > 0 && index % (cols * rows) === 0) {
+        doc.addPage();
+      }
+      const pageIndex = index % (cols * rows);
+      const col = pageIndex % cols;
+      const row = Math.floor(pageIndex / cols);
+
+      const x = startX + col * (cardW + gapX);
+      const y = startY + row * (cardH + gapY);
+
+      // Card border
+      doc.setDrawColor(30, 64, 175);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(x, y, cardW, cardH, 2, 2);
+
+      // Top color stripe
+      doc.setFillColor(30, 64, 175);
+      doc.rect(x, y, cardW, 2, 'F');
+
+      // Header text
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6);
+      doc.setTextColor(30, 64, 175);
+      doc.text(settings.nama_sekolah.toUpperCase(), x + cardW / 2, y + 5.5, { align: 'center' });
+
+      doc.setFontSize(5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(settings.nama_perpustakaan.toUpperCase(), x + cardW / 2, y + 8, { align: 'center' });
+
+      doc.setFontSize(4.5);
+      doc.setTextColor(71, 85, 105);
+      doc.text('KARTU ANGGOTA PERPUSTAKAAN', x + cardW / 2, y + 10.5, { align: 'center' });
+
+      // Line
+      doc.setDrawColor(203, 213, 225);
+      doc.line(x + 3, y + 12, x + cardW - 3, y + 12);
+
+      // Photo frame
+      doc.setFillColor(241, 245, 249);
+      doc.roundedRect(x + 4, y + 14, 15, 20, 1, 1, 'FD');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5);
+      doc.setTextColor(148, 163, 184);
+      doc.text('FOTO', x + 11.5, y + 25, { align: 'center' });
+
+      // Info
+      const infoX = x + 22;
+      let curY = 16.5;
+      const drawInfo = (lbl: string, val: string, isBold = false) => {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(lbl, infoX, curY);
+        doc.text(':', infoX + 9, curY);
+        if (isBold) doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42);
+        doc.text(val, infoX + 11, curY);
+        curY += 4;
+      };
+
+      drawInfo('Nama', member.nama.length > 18 ? member.nama.substring(0, 17) + '...' : member.nama, true);
+      drawInfo('NIS', member.nis);
+      drawInfo('Kelas', member.kelas);
+      drawInfo('Kode', member.kode_anggota, true);
+
+      // QR Code
+      try {
+        const qr = await QRCode.toDataURL(member.qr_token || member.kode_anggota, { margin: 1, width: 80 });
+        doc.addImage(qr, 'PNG', x + cardW - 20, y + 14, 16, 16);
+      } catch {
+        // ignore
+      }
+
+      // Footer
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(4);
+      doc.setTextColor(148, 163, 184);
+      doc.text('Wajib dibawa saat meminjam buku', x + 4, y + 51);
+      doc.text('Berlaku Selama Menjadi Siswa', x + cardW - 4, y + 51, { align: 'right' });
+
+      index++;
+    }
+
+    doc.save(`koleksi_kartu_anggota_${new Date().toISOString().split('T')[0]}.pdf`);
+  }
+}
+
+export const pdfService = new PdfService();
