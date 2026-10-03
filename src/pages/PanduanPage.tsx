@@ -3,6 +3,7 @@ import {
   BookOpen,
   Search,
   Printer,
+  Download,
   ChevronDown,
   ChevronUp,
   ShieldCheck,
@@ -21,9 +22,16 @@ import {
   Sparkles,
   Info,
   Layers,
-  Award
+  Award,
+  Clock,
+  Tag,
+  Receipt,
+  Check,
+  FileText
 } from 'lucide-react';
 import { Settings as SettingsType } from '../types';
+import { pdfService } from '../services/pdfService';
+import { useToast } from '../components/common/Toast';
 
 interface PanduanPageProps {
   settings: SettingsType;
@@ -31,22 +39,30 @@ interface PanduanPageProps {
 
 interface Section {
   id: string;
+  chapterNumber: string;
   title: string;
   badge: string;
+  badgeColor?: string;
   icon: React.ReactNode;
   content: React.ReactNode;
 }
 
 export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
+  const toast = useToast();
+
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     pengenalan: true,
     pengaturan: true,
+    dashboard: false,
     buku: false,
     anggota: false,
     peminjaman: false,
     pengembalian: false,
+    transaksi: false,
     laporan: false,
+    pengguna: false,
     backup: false,
     faq: false
   });
@@ -68,18 +84,33 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
   };
 
   const handlePrint = () => {
-    // Expand all before printing
     expandAll();
     setTimeout(() => {
       window.print();
-    }, 200);
+    }, 250);
+  };
+
+  const handleExportPdf = async () => {
+    try {
+      setIsExporting(true);
+      toast.info('Menyiapkan Buku Panduan Resmi dalam format PDF...');
+      await pdfService.exportBukuPanduan(settings);
+      toast.success('Buku Panduan PDF berhasil diunduh!');
+    } catch (err) {
+      console.error('Gagal export buku panduan PDF:', err);
+      toast.error('Gagal mengekspor PDF Buku Panduan.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const sections: Section[] = [
     {
       id: 'pengenalan',
-      title: '1. Pengenalan Sistem & Akun Masuk (Login)',
+      chapterNumber: 'BAB I',
+      title: 'Pengenalan Sistem & Akun Masuk (Login)',
       badge: 'Dasar',
+      badgeColor: 'bg-blue-100 text-blue-800',
       icon: <ShieldCheck className="w-5 h-5 text-blue-600" />,
       content: (
         <div className="space-y-4 text-slate-700 text-sm leading-relaxed">
@@ -116,18 +147,20 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
             <h4 className="font-bold text-slate-800 mb-2">Akun Bawaan (Default Login):</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div className="p-3 bg-white rounded-xl border border-slate-200">
-                <div className="font-bold text-slate-700">Akun Admin:</div>
+                <div className="font-bold text-slate-700">Akun Administrator:</div>
                 <div className="text-slate-600 font-mono mt-1">Username: <strong>admin</strong></div>
                 <div className="text-slate-600 font-mono">Password: <strong>admin123</strong></div>
+                <div className="text-[10px] text-blue-600 mt-1 font-sans">Akses penuh ke semua menu &amp; pengaturan</div>
               </div>
               <div className="p-3 bg-white rounded-xl border border-slate-200">
                 <div className="font-bold text-slate-700">Akun Petugas:</div>
                 <div className="text-slate-600 font-mono mt-1">Username: <strong>petugas</strong></div>
                 <div className="text-slate-600 font-mono">Password: <strong>petugas123</strong></div>
+                <div className="text-[10px] text-emerald-600 mt-1 font-sans">Pelayanan sirkulasi peminjaman &amp; pengembalian</div>
               </div>
             </div>
             <p className="text-[11px] text-amber-700 mt-2 font-medium">
-              * Segera ubah kata sandi akun bawaan pada menu <strong>Pengguna</strong> demi keamanan data perpustakaan sekolah.
+              * Segera ubah kata sandi akun bawaan pada menu <strong>Pengguna</strong> demi menjaga kerahasiaan dan keamanan data perpustakaan sekolah.
             </p>
           </div>
         </div>
@@ -135,8 +168,10 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
     },
     {
       id: 'pengaturan',
-      title: '2. Pengaturan Identitas Sekolah & NUPTK Pejabat',
+      chapterNumber: 'BAB II',
+      title: 'Pengaturan Identitas Sekolah & NUPTK Pejabat',
       badge: 'Penting',
+      badgeColor: 'bg-indigo-100 text-indigo-800',
       icon: <Settings className="w-5 h-5 text-indigo-600" />,
       content: (
         <div className="space-y-4 text-slate-700 text-sm leading-relaxed">
@@ -170,7 +205,7 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
                   Lengkapi data:
                 </p>
                 <ul className="list-disc list-inside text-xs text-slate-700 mt-1 space-y-0.5 pl-1">
-                  <li><strong>Nama Kepala Sekolah</strong> &amp; <strong>NUPTK Kepala Sekolah</strong></li>
+                  <li><strong>Nama Kepala Sekolah</strong> &amp; <strong>NUPTK Kepala Sekolah</strong> (16 digit)</li>
                   <li><strong>Nama Petugas / Kepala Perpustakaan</strong> &amp; <strong>NUPTK Petugas</strong></li>
                 </ul>
                 <p className="text-[11px] text-indigo-800 mt-1.5 font-medium bg-white/70 p-2 rounded-lg border border-indigo-100">
@@ -195,14 +230,68 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
       )
     },
     {
+      id: 'dashboard',
+      chapterNumber: 'BAB III',
+      title: 'Navigasi Dashboard & Pintasan Cepat (Quick Scan)',
+      badge: 'Navigasi',
+      badgeColor: 'bg-teal-100 text-teal-800',
+      icon: <BarChart3 className="w-5 h-5 text-teal-600" />,
+      content: (
+        <div className="space-y-4 text-slate-700 text-sm leading-relaxed">
+          <p>
+            Halaman Dashboard merupakan pusat informasi operasional perpustakaan secara langsung (real-time). Setiap ada peminjaman atau pengembalian baru, angka-angka pada dashboard langsung diperbarui otomatis:
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="font-bold text-slate-800">Total Koleksi Buku</div>
+              <p className="text-slate-500 mt-0.5">Jumlah seluruh eksemplar buku yang dimiliki perpustakaan.</p>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="font-bold text-slate-800">Buku Dipinjam</div>
+              <p className="text-slate-500 mt-0.5">Buku yang saat ini sedang berada di tangan siswa atau guru.</p>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="font-bold text-slate-800">Buku Tersedia</div>
+              <p className="text-slate-500 mt-0.5">Eksemplar yang ada di rak dan siap untuk dipinjam.</p>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="font-bold text-slate-800">Anggota Aktif</div>
+              <p className="text-slate-500 mt-0.5">Siswa dan staf sekolah yang terdaftar dan berstatus aktif.</p>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="font-bold text-slate-800">Buku Jatuh Tempo</div>
+              <p className="text-slate-500 mt-0.5">Peminjaman yang telah melewati batas waktu pengembalian.</p>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="font-bold text-slate-800">Kas Total Denda</div>
+              <p className="text-slate-500 mt-0.5">Total penerimaan kas dari denda keterlambatan buku.</p>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs space-y-1">
+            <div className="font-bold text-slate-800 flex items-center gap-1.5">
+              <QrCode className="w-4 h-4 text-blue-600" />
+              <span>Tombol Quick Scan Barcode (Navbar Atas)</span>
+            </div>
+            <p className="text-slate-600">
+              Pada bilah atas (Navbar), terdapat tombol <strong>Quick Scan</strong> yang dapat diklik kapan saja untuk memindai kode batang buku atau kartu anggota tanpa harus berpindah halaman terlebih dahulu.
+            </p>
+          </div>
+        </div>
+      )
+    },
+    {
       id: 'buku',
-      title: '3. Manajemen Koleksi Buku & Cetak Barcode',
+      chapterNumber: 'BAB IV',
+      title: 'Manajemen Data Koleksi Buku & Kategori',
       badge: 'Koleksi',
+      badgeColor: 'bg-emerald-100 text-emerald-800',
       icon: <BookOpen className="w-5 h-5 text-emerald-600" />,
       content: (
         <div className="space-y-4 text-slate-700 text-sm leading-relaxed">
           <p>
-            Menu <strong>Data Buku</strong> menyediakan sarana lengkap untuk mengelola inventaris buku, mencetak label kode batang (barcode), serta impor data massal dari file Microsoft Excel.
+            Menu <strong>Data Buku</strong> dan <strong>Kategori Buku</strong> menyediakan sarana lengkap untuk mengelola inventaris buku, mencetak label kode batang (barcode), serta impor data massal dari file Microsoft Excel.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
@@ -251,8 +340,10 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
     },
     {
       id: 'anggota',
-      title: '4. Manajemen Data Anggota & Cetak Kartu Anggota (Batch 8 Per Halaman)',
+      chapterNumber: 'BAB V',
+      title: 'Manajemen Data Anggota & Cetak Kartu (8 Kartu / Lembar A4)',
       badge: 'Anggota',
+      badgeColor: 'bg-amber-100 text-amber-800',
       icon: <CreditCard className="w-5 h-5 text-amber-600" />,
       content: (
         <div className="space-y-4 text-slate-700 text-sm leading-relaxed">
@@ -287,7 +378,7 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
           <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
             <div className="font-bold text-slate-800">Import Data Anggota via Excel:</div>
             <p className="text-slate-600">
-              Sama seperti buku, Anda dapat mengimpor data seluruh siswa dari file Excel (NIS, Nama Lengkap, Kelas, No. HP, Alamat) hanya dengan satu klik.
+              Sama seperti buku, Anda dapat mengimpor data seluruh siswa dari file Excel (NIS, Nama Lengkap, Kelas, No. HP, Alamat) hanya dengan satu kali unggah berkas.
             </p>
           </div>
         </div>
@@ -295,8 +386,10 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
     },
     {
       id: 'peminjaman',
-      title: '5. Tata Cara Transaksi Peminjaman Buku',
+      chapterNumber: 'BAB VI',
+      title: 'Tata Cara Transaksi Peminjaman Buku',
       badge: 'Sirkulasi',
+      badgeColor: 'bg-emerald-100 text-emerald-800',
       icon: <ArrowUpRight className="w-5 h-5 text-emerald-600" />,
       content: (
         <div className="space-y-4 text-slate-700 text-sm leading-relaxed">
@@ -346,8 +439,10 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
     },
     {
       id: 'pengembalian',
-      title: '6. Tata Cara Pengembalian Buku & Pelunasan Denda',
+      chapterNumber: 'BAB VII',
+      title: 'Tata Cara Pengembalian Buku & Pelunasan Denda',
       badge: 'Sirkulasi',
+      badgeColor: 'bg-blue-100 text-blue-800',
       icon: <ArrowDownLeft className="w-5 h-5 text-blue-600" />,
       content: (
         <div className="space-y-4 text-slate-700 text-sm leading-relaxed">
@@ -388,9 +483,41 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
       )
     },
     {
+      id: 'transaksi',
+      chapterNumber: 'BAB VIII',
+      title: 'Monitoring Riwayat Semua Transaksi',
+      badge: 'Audit',
+      badgeColor: 'bg-violet-100 text-violet-800',
+      icon: <Receipt className="w-5 h-5 text-violet-600" />,
+      content: (
+        <div className="space-y-4 text-slate-700 text-sm leading-relaxed">
+          <p>
+            Menu <strong>Semua Transaksi</strong> menyimpan riwayat lengkap seluruh sirkulasi perpustakaan dari masa ke masa:
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+              <div className="font-bold text-slate-800">Filter Status Transaksi</div>
+              <p className="text-slate-600">
+                Saring data berdasarkan status: <strong>Dipinjam</strong>, <strong>Kembali Sebagian</strong>, <strong>Selesai (Kembali Penuh)</strong>, atau <strong>Terlambat</strong>.
+              </p>
+            </div>
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+              <div className="font-bold text-slate-800">Cetak Ulang Bukti Transaksi</div>
+              <p className="text-slate-600">
+                Bila siswa kehilangan struk peminjaman atau kuitansi denda, petugas dapat mencetak ulang tanda bukti kapan pun melalui tombol aksi di tabel.
+              </p>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
       id: 'laporan',
-      title: '7. Laporan Perpustakaan & Pengesahan Dokumen Resmi',
+      chapterNumber: 'BAB IX',
+      title: 'Laporan Perpustakaan & Pengesahan Dokumen Ber-NUPTK',
       badge: 'Laporan',
+      badgeColor: 'bg-purple-100 text-purple-800',
       icon: <BarChart3 className="w-5 h-5 text-purple-600" />,
       content: (
         <div className="space-y-4 text-slate-700 text-sm leading-relaxed">
@@ -443,9 +570,41 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
       )
     },
     {
+      id: 'pengguna',
+      chapterNumber: 'BAB X',
+      title: 'Manajemen Akun Pengguna (User Management)',
+      badge: 'Admin',
+      badgeColor: 'bg-rose-100 text-rose-800',
+      icon: <Users className="w-5 h-5 text-rose-600" />,
+      content: (
+        <div className="space-y-4 text-slate-700 text-sm leading-relaxed">
+          <p>
+            Menu <strong>Pengguna</strong> (khusus Administrator) berfungsi untuk mengelola seluruh akun petugas yang bertugas mengoperasikan aplikasi:
+          </p>
+
+          <div className="space-y-2 text-xs">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="font-bold text-slate-800">1. Tambah Akun Petugas Baru</div>
+              <p className="text-slate-600 mt-0.5">Daftarkan nama petugas, username login, kata sandi, dan role (ADMIN atau PETUGAS).</p>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="font-bold text-slate-800">2. Reset Kata Sandi</div>
+              <p className="text-slate-600 mt-0.5">Jika ada petugas yang lupa kata sandinya, Administrator dapat mengganti sandi akun tersebut secara langsung.</p>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="font-bold text-slate-800">3. Nonaktifkan Akun</div>
+              <p className="text-slate-600 mt-0.5">Petugas yang telah mutasi atau purna tugas dapat dinonaktifkan tanpa menghilangkan riwayat transaksi lampau.</p>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
       id: 'backup',
-      title: '8. Pemeliharaan & Cadangan Data (Backup & Restore Database)',
+      chapterNumber: 'BAB XI',
+      title: 'Pemeliharaan & Cadangan Data (Backup & Restore Database)',
       badge: 'Keamanan',
+      badgeColor: 'bg-rose-100 text-rose-800',
       icon: <Database className="w-5 h-5 text-rose-600" />,
       content: (
         <div className="space-y-4 text-slate-700 text-sm leading-relaxed">
@@ -485,8 +644,10 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
     },
     {
       id: 'faq',
-      title: '9. Tanya Jawab (FAQ) & Tips Penggunaan Alat Scanner',
+      chapterNumber: 'BAB XII',
+      title: 'Tanya Jawab (FAQ) & Tips Penggunaan Alat Scanner',
       badge: 'Bantuan',
+      badgeColor: 'bg-teal-100 text-teal-800',
       icon: <HelpCircle className="w-5 h-5 text-teal-600" />,
       content: (
         <div className="space-y-3 text-slate-700 text-sm leading-relaxed">
@@ -527,6 +688,7 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
     const query = searchQuery.toLowerCase();
     return (
       section.title.toLowerCase().includes(query) ||
+      section.chapterNumber.toLowerCase().includes(query) ||
       section.badge.toLowerCase().includes(query)
     );
   });
@@ -539,24 +701,33 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500/20 text-blue-300 border border-blue-400/30 rounded-full text-xs font-semibold mb-3">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Dokumentasi Resmi &amp; Petunjuk Pengoperasian</span>
+              <span>Dokumentasi Resmi &amp; Petunjuk Pengoperasian Lengkap</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
               Buku Panduan Penggunaan Sistem Perpustakaan
             </h1>
             <p className="text-slate-300 text-xs sm:text-sm mt-2 leading-relaxed">
-              Panduan langkah demi langkah penggunaan fitur sirkulasi, manajemen buku, cetak kartu anggota standar CR80, pelunasan denda, hingga pembuatan laporan ber-NUPTK resmi di <strong>{settings.nama_sekolah}</strong>.
+              Panduan operasional lengkap untuk Administrator dan Petugas: sirkulasi peminjaman, pengembalian, kalkulasi denda, cetak kartu anggota batch 8 per A4, hingga laporan resmi ber-NUPTK di <strong>{settings.nama_sekolah}</strong>.
             </p>
           </div>
 
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0 no-print">
             <button
+              onClick={handleExportPdf}
+              disabled={isExporting}
+              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+              title="Unduh Berkas Buku Panduan Resmi dalam Format PDF"
+            >
+              <Download className="w-4 h-4" />
+              <span>{isExporting ? 'Mengekspor PDF...' : 'Export ke PDF (Unduh)'}</span>
+            </button>
+            <button
               onClick={handlePrint}
               className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
-              title="Cetak Panduan Lengkap atau Simpan sebagai PDF"
+              title="Cetak langsung menggunakan printer fisik browser"
             >
               <Printer className="w-4 h-4" />
-              <span>Cetak / Simpan PDF</span>
+              <span>Cetak / Print</span>
             </button>
             <button
               onClick={expandAll}
@@ -574,7 +745,7 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
         </div>
       </div>
 
-      {/* Search & Stats Bar */}
+      {/* Search & Metadata Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs no-print">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -590,12 +761,12 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
         <div className="flex items-center gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-1.5">
             <BookOpen className="w-4 h-4 text-blue-600" />
-            <span><strong>{sections.length}</strong> Bab Panduan Tersedia</span>
+            <span><strong>{sections.length}</strong> Bab Panduan Lengkap</span>
           </div>
           <span className="hidden sm:inline text-slate-300">•</span>
           <div className="flex items-center gap-1.5">
-            <Info className="w-4 h-4 text-emerald-600" />
-            <span>Versi Sistem: <strong>2.5.0 Standar Sekolah</strong></span>
+            <Award className="w-4 h-4 text-indigo-600" />
+            <span>Format NUPTK Resmi Terintegrasi</span>
           </div>
         </div>
       </div>
@@ -620,10 +791,13 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-blue-600 tracking-wider">
+                        {section.chapterNumber}:
+                      </span>
                       <span className="font-bold text-slate-800 text-sm sm:text-base">
                         {section.title}
                       </span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${section.badgeColor || 'bg-slate-100 text-slate-600'}`}>
                         {section.badge}
                       </span>
                     </div>
