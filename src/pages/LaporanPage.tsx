@@ -587,24 +587,28 @@ export const LaporanPage: React.FC<LaporanPageProps> = ({ settings }) => {
 
         {/* Tanda Tangan Resmi Pengesahan (Hanya muncul saat print atau di bagian bawah) */}
         <div className="mt-12 pt-6 border-t border-slate-300 flex justify-between text-xs text-slate-700">
-          <div className="text-center w-52">
+          <div className="text-center w-56">
             <p>Mengetahui,</p>
             <p className="font-bold">Kepala Sekolah</p>
             <div className="h-16" />
             <p className="font-bold border-b border-slate-600 inline-block px-4">
-              Drs. H. Mulyadi, M.Pd
+              {settings.nama_kepala_sekolah || 'Drs. H. Mulyadi, M.Pd'}
             </p>
-            <p className="text-[10px] text-slate-500">NIP. 19740512 199803 1 002</p>
+            <p className="text-[10px] text-slate-500">
+              {settings.nip_kepala_sekolah ? `NUPTK. ${settings.nip_kepala_sekolah}` : '-'}
+            </p>
           </div>
 
-          <div className="text-center w-52">
-            <p>Jakarta, {new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' }).format(new Date())}</p>
+          <div className="text-center w-56">
+            <p>{new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' }).format(new Date())}</p>
             <p className="font-bold">Kepala Perpustakaan</p>
             <div className="h-16" />
             <p className="font-bold border-b border-slate-600 inline-block px-4">
-              Bambang Sudarsono, S.Pd
+              {settings.nama_petugas || 'Bambang Sudarsono, S.Pd'}
             </p>
-            <p className="text-[10px] text-slate-500">NIP. 19820415 200604 1 008</p>
+            <p className="text-[10px] text-slate-500">
+              {settings.nip_petugas ? `NUPTK. ${settings.nip_petugas}` : '-'}
+            </p>
           </div>
         </div>
       </div>

@@ -221,7 +221,7 @@ export const PengembalianPage: React.FC<PengembalianPageProps> = ({ currentUserI
       // Create return receipt data for printing and PDF
       const receipt: ReturnReceiptData = {
         member: selectedMember,
-        petugasName: db.getCurrentUser()?.nama || 'Petugas',
+        petugasName: db.getCurrentUser()?.nama || settings.nama_petugas || 'Petugas Perpustakaan',
         items: returnItems.map(item => ({
           buku: item.activeLoan.buku,
           kodeTransaksi: item.activeLoan.kodeTransaksi,

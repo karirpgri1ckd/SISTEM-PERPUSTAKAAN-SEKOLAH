@@ -94,6 +94,10 @@ export interface Settings {
   telepon: string;
   email: string;
   logo: string;
+  nama_kepala_sekolah?: string;
+  nip_kepala_sekolah?: string;
+  nama_petugas?: string;
+  nip_petugas?: string;
   maksimal_peminjaman: number; // e.g. 3
   lama_peminjaman: number; // e.g. 7 hari
   denda_per_hari: number; // e.g. 1000

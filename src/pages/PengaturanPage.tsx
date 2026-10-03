@@ -8,7 +8,8 @@ import {
   AlertTriangle,
   Building,
   Sliders,
-  Database
+  Database,
+  UserCheck
 } from 'lucide-react';
 import { Settings } from '../types';
 import { db } from '../database/db';
@@ -171,6 +172,103 @@ export const PengaturanPage: React.FC<PengaturanPageProps> = ({
                 placeholderType="logo"
                 helpText="Unggah file foto logo sekolah atau foto langsung dari kamera. Logo ini akan otomatis dicetak pada kartu anggota siswa, label barcode buku, dan struk bukti peminjaman/pengembalian."
               />
+            </div>
+          </div>
+        </div>
+
+        {/* Pejabat Penanggung Jawab & Petugas */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-1">
+            <h3 className="font-extrabold text-slate-800 text-base flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-emerald-600" />
+              <span>Pejabat Penanggung Jawab &amp; Petugas</span>
+            </h3>
+            <span className="text-[11px] font-semibold text-slate-400">
+              Otomatis terhubung ke Laporan Resmi, PDF &amp; Bukti Sirkulasi
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {/* Kepala Sekolah */}
+            <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+              <div className="flex items-center gap-2 pb-1 border-b border-slate-200/60">
+                <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs">
+                  1
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Kepala Sekolah
+                  </h4>
+                  <p className="text-[10px] text-slate-500">Penandatangan pengesahan laporan resmi</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Nama Kepala Sekolah
+                </label>
+                <input
+                  type="text"
+                  value={formData.nama_kepala_sekolah || ''}
+                  onChange={e => setFormData({ ...formData, nama_kepala_sekolah: e.target.value })}
+                  placeholder="Contoh: Drs. H. Mulyadi, M.Pd"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  NUPTK Kepala Sekolah
+                </label>
+                <input
+                  type="text"
+                  value={formData.nip_kepala_sekolah || ''}
+                  onChange={e => setFormData({ ...formData, nip_kepala_sekolah: e.target.value })}
+                  placeholder="Contoh: 1234567890123456"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Petugas / Kepala Perpustakaan */}
+            <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+              <div className="flex items-center gap-2 pb-1 border-b border-slate-200/60">
+                <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">
+                  2
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Kepala Perpustakaan / Petugas
+                  </h4>
+                  <p className="text-[10px] text-slate-500">Penanggung jawab operasional perpustakaan</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Nama Petugas / Kepala Perpustakaan
+                </label>
+                <input
+                  type="text"
+                  value={formData.nama_petugas || ''}
+                  onChange={e => setFormData({ ...formData, nama_petugas: e.target.value })}
+                  placeholder="Contoh: Bambang Sudarsono, S.Pd"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  NUPTK Petugas / Kepala Perpustakaan
+                </label>
+                <input
+                  type="text"
+                  value={formData.nip_petugas || ''}
+                  onChange={e => setFormData({ ...formData, nip_petugas: e.target.value })}
+                  placeholder="Contoh: 1234567890123456 (atau strip jika belum ada)"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
           </div>
         </div>

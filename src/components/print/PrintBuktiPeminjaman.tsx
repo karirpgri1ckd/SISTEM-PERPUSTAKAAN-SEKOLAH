@@ -136,7 +136,7 @@ export const PrintBuktiPeminjaman: React.FC<PrintBuktiPeminjamanProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-600">Petugas:</span>
-                <span>{transaction.petugas?.nama || 'Admin'}</span>
+                <span>{transaction.petugas?.nama || settings.nama_petugas || 'Petugas Perpustakaan'}</span>
               </div>
             </div>
 

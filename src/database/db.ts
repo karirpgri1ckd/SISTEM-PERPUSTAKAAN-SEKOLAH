@@ -320,7 +320,8 @@ export class Database {
 
   // --- Settings ---
   public getSettings(): Settings {
-    return this.get<Settings>(KEYS.SETTINGS, SEED_SETTINGS);
+    const saved = this.get<Settings>(KEYS.SETTINGS, SEED_SETTINGS);
+    return { ...SEED_SETTINGS, ...saved };
   }
 
   public saveSettings(settings: Settings): void {

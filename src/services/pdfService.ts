@@ -108,6 +108,7 @@ export class PdfService {
       startY = 20;
     }
 
+    const settings = this.getSettings();
     const todayStr = new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' }).format(new Date());
 
     doc.setFont('helvetica', 'normal');
@@ -120,22 +121,26 @@ export class PdfService {
     doc.setFont('helvetica', 'bold');
     doc.text('Kepala Sekolah', leftX, startY + 5, { align: 'center' });
 
-    doc.text('Drs. H. Mulyadi, M.Pd', leftX, startY + 28, { align: 'center' });
+    const namaKepsek = settings.nama_kepala_sekolah || 'Drs. H. Mulyadi, M.Pd';
+    const nipKepsek = settings.nip_kepala_sekolah ? `NUPTK. ${settings.nip_kepala_sekolah}` : '-';
+    doc.text(namaKepsek, leftX, startY + 28, { align: 'center' });
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.text('NIP. 19740512 199803 1 002', leftX, startY + 32, { align: 'center' });
+    doc.text(nipKepsek, leftX, startY + 32, { align: 'center' });
 
-    // Right signature: Kepala Perpustakaan
+    // Right signature: Kepala Perpustakaan / Petugas
     const rightX = pageWidth - 45;
     doc.setFontSize(8.5);
-    doc.text(`Jakarta, ${todayStr}`, rightX, startY, { align: 'center' });
+    doc.text(todayStr, rightX, startY, { align: 'center' });
     doc.setFont('helvetica', 'bold');
     doc.text('Kepala Perpustakaan', rightX, startY + 5, { align: 'center' });
 
-    doc.text('Bambang Sudarsono, S.Pd', rightX, startY + 28, { align: 'center' });
+    const namaPetugas = settings.nama_petugas || 'Bambang Sudarsono, S.Pd';
+    const nipPetugas = settings.nip_petugas ? `NUPTK. ${settings.nip_petugas}` : '-';
+    doc.text(namaPetugas, rightX, startY + 28, { align: 'center' });
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.text('NIP. 19820415 200604 1 008', rightX, startY + 32, { align: 'center' });
+    doc.text(nipPetugas, rightX, startY + 32, { align: 'center' });
   }
 
   /**
