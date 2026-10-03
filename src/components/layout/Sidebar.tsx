@@ -10,6 +10,7 @@ import {
   Tags,
   Settings,
   UserCog,
+  HelpCircle,
   LogOut,
   X
 } from 'lucide-react';
@@ -24,6 +25,7 @@ export type NavTab =
   | 'transaksi'
   | 'laporan'
   | 'kategori'
+  | 'panduan'
   | 'pengaturan'
   | 'pengguna';
 
@@ -95,6 +97,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'kategori',
       label: 'Kategori Buku',
       icon: <Tags className="w-5 h-5" />
+    },
+    {
+      id: 'panduan',
+      label: 'Buku Panduan',
+      icon: <HelpCircle className="w-5 h-5 text-amber-400" />,
+      badge: 'Bantuan'
     },
     {
       id: 'pengaturan',

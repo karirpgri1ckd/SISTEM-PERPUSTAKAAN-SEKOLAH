@@ -11,7 +11,8 @@ import {
   Bookmark,
   ChevronRight,
   Sparkles,
-  QrCode
+  QrCode,
+  HelpCircle
 } from 'lucide-react';
 import { transactionService } from '../services/transactionService';
 import { NavTab } from '../components/layout/Sidebar';
@@ -379,8 +380,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-blue-200/50 flex justify-between items-center text-[11px] text-slate-500">
+          <div className="mt-6 pt-4 border-t border-blue-200/50 flex flex-col sm:flex-row justify-between items-center gap-3 text-[11px] text-slate-500">
             <span>Dukungan: Kamera Web &amp; Barcode Scanner USB</span>
+            <button
+              onClick={() => onNavigate('panduan')}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs transition-colors cursor-pointer text-xs"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-amber-300" />
+              <span>Buku Panduan Penggunaan</span>
+            </button>
           </div>
         </div>
       </div>

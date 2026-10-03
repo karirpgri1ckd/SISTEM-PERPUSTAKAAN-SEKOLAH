@@ -16,6 +16,7 @@ import { KategoriPage } from './pages/KategoriPage';
 import { LaporanPage } from './pages/LaporanPage';
 import { PengaturanPage } from './pages/PengaturanPage';
 import { PenggunaPage } from './pages/PenggunaPage';
+import { PanduanPage } from './pages/PanduanPage';
 
 const AppContent: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
@@ -78,6 +79,7 @@ const AppContent: React.FC = () => {
       {currentTab === 'transaksi' && <TransaksiPage settings={settings} />}
       {currentTab === 'laporan' && <LaporanPage settings={settings} />}
       {currentTab === 'kategori' && <KategoriPage />}
+      {currentTab === 'panduan' && <PanduanPage settings={settings} />}
       {currentTab === 'pengaturan' && (
         <PengaturanPage settings={settings} onUpdateSettings={setSettings} />
       )}
