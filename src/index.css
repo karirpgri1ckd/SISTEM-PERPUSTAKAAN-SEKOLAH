@@ -41,11 +41,12 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
     margin: 0;
     padding: 0;
     background: #ffffff !important;
     color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .no-print {

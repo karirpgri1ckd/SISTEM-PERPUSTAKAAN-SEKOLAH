@@ -10,6 +10,45 @@ export class PdfService {
   }
 
   /**
+   * Helper to safely convert an image source (data URL or external URL) to a format jsPDF can render
+   */
+  private async getImageDataUrl(src?: string): Promise<string | null> {
+    if (!src || typeof src !== 'string' || src.trim() === '') return null;
+    if (src.startsWith('data:image/')) return src;
+
+    return new Promise(resolve => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      const timer = setTimeout(() => resolve(null), 2000);
+
+      img.onload = () => {
+        clearTimeout(timer);
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || 120;
+          canvas.height = img.naturalHeight || 160;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+          } else {
+            resolve(null);
+          }
+        } catch {
+          resolve(null);
+        }
+      };
+
+      img.onerror = () => {
+        clearTimeout(timer);
+        resolve(null);
+      };
+
+      img.src = src;
+    });
+  }
+
+  /**
    * Helper to draw official school letterhead (Kop Surat) on PDF documents
    */
   private drawHeader(doc: jsPDF, title: string, subtitle?: string) {
@@ -323,76 +362,105 @@ export class PdfService {
     const cardW = 85.6;
     const cardH = 54;
 
-    // Background
+    // Background & Border
     doc.setFillColor(255, 255, 255);
-    doc.rect(0, 0, cardW, cardH, 'F');
+    doc.roundedRect(0, 0, cardW, cardH, 2, 2, 'F');
+    doc.setDrawColor(37, 99, 235);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(0.2, 0.2, cardW - 0.4, cardH - 0.4, 2, 2, 'S');
 
     // Header gradient stripe
     doc.setFillColor(30, 64, 175); // blue-800
-    doc.rect(0, 0, cardW, 2.5, 'F');
+    doc.rect(0.2, 0.2, cardW - 0.4, 2.5, 'F');
 
     // Header title
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(6.5);
     doc.setTextColor(30, 64, 175);
-    doc.text(settings.nama_sekolah.toUpperCase(), cardW / 2, 6, { align: 'center' });
+    doc.text(settings.nama_sekolah.toUpperCase(), cardW / 2, 6.2, { align: 'center' });
 
-    doc.setFontSize(5.5);
-    doc.setTextColor(15, 23, 42);
-    doc.text(settings.nama_perpustakaan.toUpperCase(), cardW / 2, 8.8, { align: 'center' });
+    doc.setFontSize(5.2);
+    doc.setTextColor(30, 41, 59);
+    doc.text(settings.nama_perpustakaan.toUpperCase(), cardW / 2, 9, { align: 'center' });
 
-    doc.setFontSize(5);
-    doc.setTextColor(71, 85, 105);
-    doc.text('KARTU ANGGOTA PERPUSTAKAAN', cardW / 2, 11.2, { align: 'center' });
+    doc.setFontSize(4.8);
+    doc.setTextColor(59, 130, 246);
+    doc.text('KARTU ANGGOTA PERPUSTAKAAN', cardW / 2, 11.5, { align: 'center' });
 
     doc.setDrawColor(203, 213, 225); // slate-300
     doc.setLineWidth(0.2);
-    doc.line(4, 13, cardW - 4, 13);
+    doc.line(3.5, 13, cardW - 3.5, 13);
 
     // Photo placeholder / image
-    const photoX = 5;
-    const photoY = 16;
+    const photoX = 4.5;
+    const photoY = 15;
     const photoW = 16;
     const photoH = 22;
 
-    doc.setFillColor(241, 245, 249);
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.2);
     doc.roundedRect(photoX, photoY, photoW, photoH, 1, 1, 'FD');
 
-    try {
-      if (member.foto && member.foto.startsWith('http')) {
-        // Can add image if loaded, or draw photo frame
+    let photoRendered = false;
+    if (member.foto && member.foto.trim() !== '') {
+      try {
+        const fotoData = await this.getImageDataUrl(member.foto);
+        if (fotoData) {
+          doc.addImage(fotoData, 'JPEG', photoX + 0.3, photoY + 0.3, photoW - 0.6, photoH - 0.6);
+          photoRendered = true;
+        }
+      } catch {
+        photoRendered = false;
       }
-    } catch {
-      // fallback
     }
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(5.5);
-    doc.setTextColor(148, 163, 184);
-    doc.text('FOTO', photoX + photoW / 2, photoY + photoH / 2, { align: 'center' });
+    if (!photoRendered) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5);
+      doc.setTextColor(148, 163, 184);
+      doc.text('FOTO', photoX + photoW / 2, photoY + photoH / 2, { align: 'center' });
+      doc.setFontSize(3.8);
+      doc.text('3 x 4', photoX + photoW / 2, photoY + photoH / 2 + 3.5, { align: 'center' });
+    }
 
     // Member Details
-    const textX = 24;
-    let detailY = 18;
+    const textX = 23;
+    const colonX = textX + 9;
+    const valX = textX + 11;
+    let detailY = 17.5;
 
     const printField = (label: string, val: string, isBold = false, isMono = false) => {
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(5.5);
+      doc.setFontSize(5);
       doc.setTextColor(100, 116, 139);
       doc.text(label, textX, detailY);
-      doc.text(':', textX + 11, detailY);
+      doc.text(':', colonX, detailY);
 
-      if (isMono) doc.setFont('courier', 'bold');
-      else if (isBold) doc.setFont('helvetica', 'bold');
-      doc.setTextColor(15, 23, 42);
-      doc.text(val, textX + 13, detailY);
+      if (isMono) {
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(5.5);
+        doc.setTextColor(30, 64, 175);
+      } else if (isBold) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(5.2);
+        doc.setTextColor(15, 23, 42);
+      } else {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(5);
+        doc.setTextColor(30, 41, 59);
+      }
+
+      doc.text(val, valX, detailY);
       detailY += 4.5;
     };
 
-    printField('Nama', member.nama.length > 20 ? member.nama.substring(0, 19) + '...' : member.nama, true);
+    const displayName = member.nama.length > 20 ? member.nama.substring(0, 19) + '...' : member.nama;
+    printField('Nama', displayName, true);
     printField('NIS', member.nis);
     printField('Kelas', member.kelas);
     printField('Kode', member.kode_anggota, true, true);
+    printField('Status', member.status || 'Aktif');
 
     // QR Code
     try {
@@ -400,24 +468,31 @@ export class PdfService {
         margin: 1,
         width: 100
       });
-      doc.addImage(qrDataUrl, 'PNG', cardW - 22, 17, 18, 18);
+      const qrSize = 17;
+      const qrX = cardW - qrSize - 4.5;
+      const qrY = 15;
+      doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
       doc.setFont('courier', 'bold');
-      doc.setFontSize(4.5);
+      doc.setFontSize(4);
       doc.setTextColor(100, 116, 139);
-      doc.text('SCAN ME', cardW - 13, 37, { align: 'center' });
+      doc.text('SCAN QR', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
     } catch {
       // fallback
     }
 
     // Card Footer
     doc.setDrawColor(226, 232, 240);
-    doc.line(4, 46, cardW - 4, 46);
+    doc.setLineWidth(0.2);
+    doc.line(3.5, 46.5, cardW - 3.5, 46.5);
 
     doc.setFont('helvetica', 'italic');
-    doc.setFontSize(4.5);
+    doc.setFontSize(4);
     doc.setTextColor(148, 163, 184);
-    doc.text('Kartu ini wajib dibawa saat meminjam buku', 5, 49.5);
-    doc.text('Berlaku Selama Menjadi Siswa', cardW - 5, 49.5, { align: 'right' });
+    doc.text('* Wajib dibawa saat meminjam buku', 4.5, 50);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(4);
+    doc.setTextColor(30, 64, 175);
+    doc.text('Berlaku Selama Menjadi Siswa', cardW - 4.5, 50, { align: 'right' });
 
     doc.save(`kartu_anggota_${member.kode_anggota}.pdf`);
   }
@@ -700,7 +775,7 @@ export class PdfService {
   }
 
   /**
-   * Export Sheet of Multiple Student Cards (e.g. 4 cards per A4 page)
+   * Export Sheet of Multiple Student Cards (8 cards per A4 page)
    */
   async exportBatchKartuAnggota(members: Member[]) {
     const settings = this.getSettings();
@@ -712,10 +787,10 @@ export class PdfService {
 
     const cardW = 86;
     const cardH = 54;
-    const startX = 14;
-    const startY = 16;
-    const gapX = 10;
-    const gapY = 14;
+    const startX = 13;
+    const startY = 14;
+    const gapX = 12;
+    const gapY = 12;
     const cols = 2;
     const rows = 4; // 8 cards per A4
 
@@ -731,75 +806,135 @@ export class PdfService {
       const x = startX + col * (cardW + gapX);
       const y = startY + row * (cardH + gapY);
 
-      // Card border
-      doc.setDrawColor(30, 64, 175);
-      doc.setLineWidth(0.3);
-      doc.roundedRect(x, y, cardW, cardH, 2, 2);
+      // Card background & border
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(x, y, cardW, cardH, 2, 2, 'F');
+      doc.setDrawColor(37, 99, 235);
+      doc.setLineWidth(0.35);
+      doc.roundedRect(x, y, cardW, cardH, 2, 2, 'S');
 
       // Top color stripe
       doc.setFillColor(30, 64, 175);
-      doc.rect(x, y, cardW, 2, 'F');
+      doc.rect(x + 0.2, y + 0.2, cardW - 0.4, 2.2, 'F');
 
       // Header text
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6);
+      doc.setFontSize(6.2);
       doc.setTextColor(30, 64, 175);
-      doc.text(settings.nama_sekolah.toUpperCase(), x + cardW / 2, y + 5.5, { align: 'center' });
+      doc.text(settings.nama_sekolah.toUpperCase(), x + cardW / 2, y + 5.8, { align: 'center' });
 
       doc.setFontSize(5);
-      doc.setTextColor(15, 23, 42);
-      doc.text(settings.nama_perpustakaan.toUpperCase(), x + cardW / 2, y + 8, { align: 'center' });
+      doc.setTextColor(30, 41, 59);
+      doc.text(settings.nama_perpustakaan.toUpperCase(), x + cardW / 2, y + 8.5, { align: 'center' });
 
       doc.setFontSize(4.5);
-      doc.setTextColor(71, 85, 105);
-      doc.text('KARTU ANGGOTA PERPUSTAKAAN', x + cardW / 2, y + 10.5, { align: 'center' });
+      doc.setTextColor(59, 130, 246);
+      doc.text('KARTU ANGGOTA PERPUSTAKAAN', x + cardW / 2, y + 11.2, { align: 'center' });
 
       // Line
       doc.setDrawColor(203, 213, 225);
-      doc.line(x + 3, y + 12, x + cardW - 3, y + 12);
+      doc.setLineWidth(0.2);
+      doc.line(x + 3.5, y + 12.8, x + cardW - 3.5, y + 12.8);
 
       // Photo frame
-      doc.setFillColor(241, 245, 249);
-      doc.roundedRect(x + 4, y + 14, 15, 20, 1, 1, 'FD');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(5);
-      doc.setTextColor(148, 163, 184);
-      doc.text('FOTO', x + 11.5, y + 25, { align: 'center' });
+      const photoX = x + 4.5;
+      const photoY = y + 14.5;
+      const photoW = 16;
+      const photoH = 21;
+
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.2);
+      doc.roundedRect(photoX, photoY, photoW, photoH, 1, 1, 'FD');
+
+      let photoDrawn = false;
+      if (member.foto && member.foto.trim() !== '') {
+        try {
+          const fotoData = await this.getImageDataUrl(member.foto);
+          if (fotoData) {
+            doc.addImage(fotoData, 'JPEG', photoX + 0.3, photoY + 0.3, photoW - 0.6, photoH - 0.6);
+            photoDrawn = true;
+          }
+        } catch {
+          photoDrawn = false;
+        }
+      }
+
+      if (!photoDrawn) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(5);
+        doc.setTextColor(148, 163, 184);
+        doc.text('FOTO', photoX + photoW / 2, photoY + photoH / 2, { align: 'center' });
+        doc.setFontSize(3.8);
+        doc.text('3 x 4', photoX + photoW / 2, photoY + photoH / 2 + 3.5, { align: 'center' });
+      }
 
       // Info
-      const infoX = x + 22;
-      let curY = 16.5;
-      const drawInfo = (lbl: string, val: string, isBold = false) => {
+      const infoX = x + 22.5;
+      const colonX = infoX + 8.5;
+      const valX = infoX + 10.5;
+      let curY = y + 17.5; // Strictly relative to y of the current card!
+
+      const drawInfo = (lbl: string, val: string, isBold = false, isMono = false) => {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(5);
         doc.setTextColor(100, 116, 139);
         doc.text(lbl, infoX, curY);
-        doc.text(':', infoX + 9, curY);
-        if (isBold) doc.setFont('helvetica', 'bold');
-        doc.setTextColor(15, 23, 42);
-        doc.text(val, infoX + 11, curY);
-        curY += 4;
+        doc.text(':', colonX, curY);
+
+        if (isMono) {
+          doc.setFont('courier', 'bold');
+          doc.setFontSize(5.5);
+          doc.setTextColor(30, 64, 175);
+        } else if (isBold) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(5.2);
+          doc.setTextColor(15, 23, 42);
+        } else {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(5);
+          doc.setTextColor(30, 41, 59);
+        }
+
+        doc.text(val, valX, curY);
+        curY += 4.2;
       };
 
-      drawInfo('Nama', member.nama.length > 18 ? member.nama.substring(0, 17) + '...' : member.nama, true);
+      const displayName = member.nama.length > 17 ? member.nama.substring(0, 16) + '...' : member.nama;
+      drawInfo('Nama', displayName, true);
       drawInfo('NIS', member.nis);
       drawInfo('Kelas', member.kelas);
-      drawInfo('Kode', member.kode_anggota, true);
+      drawInfo('Kode', member.kode_anggota, true, true);
+      drawInfo('Status', member.status || 'Aktif');
 
       // QR Code
+      const qrSize = 16;
+      const qrX = x + cardW - qrSize - 4;
+      const qrY = y + 14.5;
       try {
-        const qr = await QRCode.toDataURL(member.qr_token || member.kode_anggota, { margin: 1, width: 80 });
-        doc.addImage(qr, 'PNG', x + cardW - 20, y + 14, 16, 16);
+        const qr = await QRCode.toDataURL(member.qr_token || member.kode_anggota, { margin: 1, width: 90 });
+        doc.addImage(qr, 'PNG', qrX, qrY, qrSize, qrSize);
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(4);
+        doc.setTextColor(100, 116, 139);
+        doc.text('SCAN QR', qrX + qrSize / 2, qrY + qrSize + 2.5, { align: 'center' });
       } catch {
         // ignore
       }
 
       // Footer
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.2);
+      doc.line(x + 3.5, y + 46.5, x + cardW - 3.5, y + 46.5);
+
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(4);
       doc.setTextColor(148, 163, 184);
-      doc.text('Wajib dibawa saat meminjam buku', x + 4, y + 51);
-      doc.text('Berlaku Selama Menjadi Siswa', x + cardW - 4, y + 51, { align: 'right' });
+      doc.text('* Wajib dibawa saat meminjam buku', x + 4, y + 50.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(4);
+      doc.setTextColor(30, 64, 175);
+      doc.text('Berlaku Selama Menjadi Siswa', x + cardW - 4, y + 50.5, { align: 'right' });
 
       index++;
     }
