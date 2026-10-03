@@ -17,6 +17,15 @@ import {
   SEED_TRANSACTION_DETAILS
 } from './seedData';
 import { hashPassword } from '../utils/crypto';
+import {
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot
+} from 'firebase/firestore';
+import { firestore } from './firebase';
+import { handleFirestoreError, OperationType } from './firestoreErrors';
 
 const STORAGE_PREFIX = 'perpustakaan_';
 const KEYS = {
@@ -28,15 +37,17 @@ const KEYS = {
   DETAILS: `${STORAGE_PREFIX}transaction_details`,
   SETTINGS: `${STORAGE_PREFIX}settings`,
   CURRENT_USER: `${STORAGE_PREFIX}current_user`,
-  INITIALIZED: `${STORAGE_PREFIX}initialized_clean_v2`
+  INITIALIZED: `${STORAGE_PREFIX}initialized_clean_v3`
 };
 
 export class Database {
   private static instance: Database;
   private changeListeners: (() => void)[] = [];
+  private isFirestoreInitialized = false;
 
   private constructor() {
     this.initDatabase();
+    this.initFirestoreSync();
   }
 
   public static getInstance(): Database {
@@ -63,12 +74,14 @@ export class Database {
     });
   }
 
+  /**
+   * Initialize Local Storage Cache with Defaults
+   */
   public async initDatabase(forceReset = false) {
     if (typeof window === 'undefined') return;
 
     const initialized = localStorage.getItem(KEYS.INITIALIZED);
     if (!initialized || forceReset) {
-      // Prepare users with hashed passwords
       const usersWithHashedPw: User[] = [];
       for (const u of SEED_USERS_RAW) {
         const hashed = await hashPassword(u.rawPassword);
@@ -83,16 +96,206 @@ export class Database {
         });
       }
 
+      // If existing local settings exist from previous version, preserve them!
+      const oldSettings = localStorage.getItem(`${STORAGE_PREFIX}settings`);
+      const initialSettings = oldSettings ? JSON.parse(oldSettings) : SEED_SETTINGS;
+
       localStorage.setItem(KEYS.USERS, JSON.stringify(usersWithHashedPw));
-      localStorage.setItem(KEYS.MEMBERS, JSON.stringify(SEED_MEMBERS));
-      localStorage.setItem(KEYS.BOOKS, JSON.stringify(SEED_BOOKS));
-      localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(SEED_CATEGORIES));
-      localStorage.setItem(KEYS.SETTINGS, JSON.stringify(SEED_SETTINGS));
-      localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(SEED_TRANSACTIONS));
-      localStorage.setItem(KEYS.DETAILS, JSON.stringify(SEED_TRANSACTION_DETAILS));
+      localStorage.setItem(KEYS.MEMBERS, localStorage.getItem(`${STORAGE_PREFIX}members`) || JSON.stringify(SEED_MEMBERS));
+      localStorage.setItem(KEYS.BOOKS, localStorage.getItem(`${STORAGE_PREFIX}books`) || JSON.stringify(SEED_BOOKS));
+      localStorage.setItem(KEYS.CATEGORIES, localStorage.getItem(`${STORAGE_PREFIX}categories`) || JSON.stringify(SEED_CATEGORIES));
+      localStorage.setItem(KEYS.SETTINGS, JSON.stringify(initialSettings));
+      localStorage.setItem(KEYS.TRANSACTIONS, localStorage.getItem(`${STORAGE_PREFIX}transactions`) || JSON.stringify(SEED_TRANSACTIONS));
+      localStorage.setItem(KEYS.DETAILS, localStorage.getItem(`${STORAGE_PREFIX}transaction_details`) || JSON.stringify(SEED_TRANSACTION_DETAILS));
       localStorage.setItem(KEYS.INITIALIZED, 'true');
 
       this.notify();
+    }
+  }
+
+  /**
+   * Real-time Synchronization with Firebase Firestore
+   */
+  private initFirestoreSync() {
+    if (typeof window === 'undefined' || !firestore) return;
+    if (this.isFirestoreInitialized) return;
+    this.isFirestoreInitialized = true;
+
+    // 1. Settings listener
+    try {
+      const settingsRef = doc(firestore, 'settings', 'config');
+      onSnapshot(
+        settingsRef,
+        snapshot => {
+          if (snapshot.exists()) {
+            const data = snapshot.data() as Settings;
+            localStorage.setItem(KEYS.SETTINGS, JSON.stringify(data));
+            this.notify();
+          } else {
+            // First time cloud upload if local settings exist
+            const localSettings = this.getSettings();
+            if (localSettings) {
+              setDoc(settingsRef, localSettings).catch(err => {
+                console.warn('Initial cloud settings upload failed:', err);
+              });
+            }
+          }
+        },
+        error => {
+          handleFirestoreError(error, OperationType.GET, 'settings/config');
+        }
+      );
+    } catch (e) {
+      console.warn('Settings listener init error:', e);
+    }
+
+    // 2. Members listener
+    try {
+      const membersRef = collection(firestore, 'members');
+      onSnapshot(
+        membersRef,
+        snapshot => {
+          if (!snapshot.empty) {
+            const cloudMembers = snapshot.docs.map(d => d.data() as Member);
+            localStorage.setItem(KEYS.MEMBERS, JSON.stringify(cloudMembers));
+            this.notify();
+          } else {
+            // If cloud is empty but local has members, sync to cloud
+            const localMembers = this.getMembers();
+            if (localMembers.length > 0) {
+              localMembers.forEach(m => {
+                setDoc(doc(firestore, 'members', m.id), m).catch(() => {});
+              });
+            }
+          }
+        },
+        error => {
+          handleFirestoreError(error, OperationType.GET, 'members');
+        }
+      );
+    } catch (e) {
+      console.warn('Members listener init error:', e);
+    }
+
+    // 3. Books listener
+    try {
+      const booksRef = collection(firestore, 'books');
+      onSnapshot(
+        booksRef,
+        snapshot => {
+          if (!snapshot.empty) {
+            const cloudBooks = snapshot.docs.map(d => d.data() as Book);
+            localStorage.setItem(KEYS.BOOKS, JSON.stringify(cloudBooks));
+            this.notify();
+          } else {
+            const localBooks = this.getBooks();
+            if (localBooks.length > 0) {
+              localBooks.forEach(b => {
+                setDoc(doc(firestore, 'books', b.id), b).catch(() => {});
+              });
+            }
+          }
+        },
+        error => {
+          handleFirestoreError(error, OperationType.GET, 'books');
+        }
+      );
+    } catch (e) {
+      console.warn('Books listener init error:', e);
+    }
+
+    // 4. Categories listener
+    try {
+      const catRef = collection(firestore, 'categories');
+      onSnapshot(
+        catRef,
+        snapshot => {
+          if (!snapshot.empty) {
+            const cloudCats = snapshot.docs.map(d => d.data() as Category);
+            localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(cloudCats));
+            this.notify();
+          } else {
+            const localCats = this.getCategories();
+            if (localCats.length > 0) {
+              localCats.forEach(c => {
+                setDoc(doc(firestore, 'categories', c.id), c).catch(() => {});
+              });
+            }
+          }
+        },
+        error => {
+          handleFirestoreError(error, OperationType.GET, 'categories');
+        }
+      );
+    } catch (e) {
+      console.warn('Categories listener init error:', e);
+    }
+
+    // 5. Transactions listener
+    try {
+      const txRef = collection(firestore, 'transactions');
+      onSnapshot(
+        txRef,
+        snapshot => {
+          if (!snapshot.empty) {
+            const cloudTx = snapshot.docs.map(d => d.data() as Transaction);
+            localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(cloudTx));
+            this.notify();
+          }
+        },
+        error => {
+          handleFirestoreError(error, OperationType.GET, 'transactions');
+        }
+      );
+    } catch (e) {
+      console.warn('Transactions listener init error:', e);
+    }
+
+    // 6. Transaction Details listener
+    try {
+      const detailsRef = collection(firestore, 'transaction_details');
+      onSnapshot(
+        detailsRef,
+        snapshot => {
+          if (!snapshot.empty) {
+            const cloudDetails = snapshot.docs.map(d => d.data() as TransactionDetail);
+            localStorage.setItem(KEYS.DETAILS, JSON.stringify(cloudDetails));
+            this.notify();
+          }
+        },
+        error => {
+          handleFirestoreError(error, OperationType.GET, 'transaction_details');
+        }
+      );
+    } catch (e) {
+      console.warn('Transaction details listener init error:', e);
+    }
+
+    // 7. Users listener
+    try {
+      const usersRef = collection(firestore, 'users');
+      onSnapshot(
+        usersRef,
+        snapshot => {
+          if (!snapshot.empty) {
+            const cloudUsers = snapshot.docs.map(d => d.data() as User);
+            localStorage.setItem(KEYS.USERS, JSON.stringify(cloudUsers));
+            this.notify();
+          } else {
+            const localUsers = this.getUsers();
+            if (localUsers.length > 0) {
+              localUsers.forEach(u => {
+                setDoc(doc(firestore, 'users', u.id), u).catch(() => {});
+              });
+            }
+          }
+        },
+        error => {
+          handleFirestoreError(error, OperationType.GET, 'users');
+        }
+      );
+    } catch (e) {
+      console.warn('Users listener init error:', e);
     }
   }
 
@@ -129,11 +332,28 @@ export class Database {
       users.push(user);
     }
     this.set(KEYS.USERS, users);
+
+    // Sync to Firestore
+    try {
+      setDoc(doc(firestore, 'users', user.id), user).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `users/${user.id}`);
+      });
+    } catch (e) {
+      console.warn('Failed to sync user to Firestore:', e);
+    }
   }
 
   public deleteUser(id: string): void {
     const users = this.getUsers().filter(u => u.id !== id);
     this.set(KEYS.USERS, users);
+
+    try {
+      deleteDoc(doc(firestore, 'users', id)).catch(err => {
+        handleFirestoreError(err, OperationType.DELETE, `users/${id}`);
+      });
+    } catch (e) {
+      console.warn('Failed to delete user in Firestore:', e);
+    }
   }
 
   // --- Members ---
@@ -149,8 +369,8 @@ export class Database {
     const trimmed = query.trim().toUpperCase();
     return this.getMembers().find(
       m => m.kode_anggota.toUpperCase() === trimmed ||
-           m.qr_token.toUpperCase() === trimmed ||
-           m.nis.toUpperCase() === trimmed
+           (m.qr_token && m.qr_token.toUpperCase() === trimmed) ||
+           (m.nis && m.nis.toUpperCase() === trimmed)
     );
   }
 
@@ -163,11 +383,27 @@ export class Database {
       members.unshift(member);
     }
     this.set(KEYS.MEMBERS, members);
+
+    try {
+      setDoc(doc(firestore, 'members', member.id), member).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `members/${member.id}`);
+      });
+    } catch (e) {
+      console.warn('Failed to sync member to Firestore:', e);
+    }
   }
 
   public deleteMember(id: string): void {
     const members = this.getMembers().filter(m => m.id !== id);
     this.set(KEYS.MEMBERS, members);
+
+    try {
+      deleteDoc(doc(firestore, 'members', id)).catch(err => {
+        handleFirestoreError(err, OperationType.DELETE, `members/${id}`);
+      });
+    } catch (e) {
+      console.warn('Failed to delete member in Firestore:', e);
+    }
   }
 
   public generateNextMemberCode(): string {
@@ -196,8 +432,8 @@ export class Database {
     const trimmed = query.trim().toUpperCase();
     return this.getBooks().find(
       b => b.kode_buku.toUpperCase() === trimmed ||
-           b.qr_token.toUpperCase() === trimmed ||
-           b.isbn.replace(/-/g, '') === trimmed.replace(/-/g, '')
+           (b.qr_token && b.qr_token.toUpperCase() === trimmed) ||
+           (b.isbn && b.isbn.replace(/-/g, '') === trimmed.replace(/-/g, ''))
     );
   }
 
@@ -210,6 +446,14 @@ export class Database {
       books.unshift(book);
     }
     this.set(KEYS.BOOKS, books);
+
+    try {
+      setDoc(doc(firestore, 'books', book.id), book).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `books/${book.id}`);
+      });
+    } catch (e) {
+      console.warn('Failed to sync book to Firestore:', e);
+    }
   }
 
   public saveMultipleBooks(booksToUpdate: Book[]): void {
@@ -218,11 +462,29 @@ export class Database {
     books.forEach(b => map.set(b.id, b));
     booksToUpdate.forEach(b => map.set(b.id, b));
     this.set(KEYS.BOOKS, Array.from(map.values()));
+
+    try {
+      booksToUpdate.forEach(book => {
+        setDoc(doc(firestore, 'books', book.id), book).catch(err => {
+          handleFirestoreError(err, OperationType.WRITE, `books/${book.id}`);
+        });
+      });
+    } catch (e) {
+      console.warn('Failed to sync multiple books to Firestore:', e);
+    }
   }
 
   public deleteBook(id: string): void {
     const books = this.getBooks().filter(b => b.id !== id);
     this.set(KEYS.BOOKS, books);
+
+    try {
+      deleteDoc(doc(firestore, 'books', id)).catch(err => {
+        handleFirestoreError(err, OperationType.DELETE, `books/${id}`);
+      });
+    } catch (e) {
+      console.warn('Failed to delete book in Firestore:', e);
+    }
   }
 
   public generateNextBookCode(): string {
@@ -252,11 +514,27 @@ export class Database {
       cats.push(category);
     }
     this.set(KEYS.CATEGORIES, cats);
+
+    try {
+      setDoc(doc(firestore, 'categories', category.id), category).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `categories/${category.id}`);
+      });
+    } catch (e) {
+      console.warn('Failed to sync category to Firestore:', e);
+    }
   }
 
   public deleteCategory(id: string): void {
     const cats = this.getCategories().filter(c => c.id !== id);
     this.set(KEYS.CATEGORIES, cats);
+
+    try {
+      deleteDoc(doc(firestore, 'categories', id)).catch(err => {
+        handleFirestoreError(err, OperationType.DELETE, `categories/${id}`);
+      });
+    } catch (e) {
+      console.warn('Failed to delete category in Firestore:', e);
+    }
   }
 
   // --- Transactions & Details ---
@@ -277,6 +555,14 @@ export class Database {
       list.unshift(tx);
     }
     this.set(KEYS.TRANSACTIONS, list);
+
+    try {
+      setDoc(doc(firestore, 'transactions', tx.id), tx).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `transactions/${tx.id}`);
+      });
+    } catch (e) {
+      console.warn('Failed to sync transaction to Firestore:', e);
+    }
   }
 
   public getTransactionDetails(): TransactionDetail[] {
@@ -289,6 +575,16 @@ export class Database {
     existing.forEach(d => map.set(d.id, d));
     details.forEach(d => map.set(d.id, d));
     this.set(KEYS.DETAILS, Array.from(map.values()));
+
+    try {
+      details.forEach(detail => {
+        setDoc(doc(firestore, 'transaction_details', detail.id), detail).catch(err => {
+          handleFirestoreError(err, OperationType.WRITE, `transaction_details/${detail.id}`);
+        });
+      });
+    } catch (e) {
+      console.warn('Failed to sync transaction details to Firestore:', e);
+    }
   }
 
   public saveSingleTransactionDetail(detail: TransactionDetail): void {
@@ -300,6 +596,14 @@ export class Database {
       details.push(detail);
     }
     this.set(KEYS.DETAILS, details);
+
+    try {
+      setDoc(doc(firestore, 'transaction_details', detail.id), detail).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, `transaction_details/${detail.id}`);
+      });
+    } catch (e) {
+      console.warn('Failed to sync detail to Firestore:', e);
+    }
   }
 
   public generateNextTransactionCode(): string {
@@ -326,6 +630,14 @@ export class Database {
 
   public saveSettings(settings: Settings): void {
     this.set(KEYS.SETTINGS, settings);
+
+    try {
+      setDoc(doc(firestore, 'settings', 'config'), settings).catch(err => {
+        handleFirestoreError(err, OperationType.WRITE, 'settings/config');
+      });
+    } catch (e) {
+      console.warn('Failed to sync settings to Firestore:', e);
+    }
   }
 
   // --- Current Logged In User ---
@@ -363,6 +675,15 @@ export class Database {
         this.set(KEYS.TRANSACTIONS, data.transactions || []);
         this.set(KEYS.DETAILS, data.details || []);
         this.set(KEYS.SETTINGS, data.settings);
+
+        // Sync imported data to Firestore cloud
+        this.saveSettings(data.settings);
+        data.members.forEach((m: Member) => this.saveMember(m));
+        data.books.forEach((b: Book) => this.saveBook(b));
+        if (data.categories) data.categories.forEach((c: Category) => this.saveCategory(c));
+        if (data.transactions) data.transactions.forEach((t: Transaction) => this.saveTransaction(t));
+        if (data.details) this.saveTransactionDetails(data.details);
+
         return true;
       }
       return false;

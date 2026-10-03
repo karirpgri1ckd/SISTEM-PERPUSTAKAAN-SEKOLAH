@@ -149,7 +149,7 @@ export const PanduanPage: React.FC<PanduanPageProps> = ({ settings }) => {
               <div className="p-3 bg-white rounded-xl border border-slate-200">
                 <div className="font-bold text-slate-700">Akun Administrator:</div>
                 <div className="text-slate-600 font-mono mt-1">Username: <strong>admin</strong></div>
-                <div className="text-slate-600 font-mono">Password: <strong>admin123</strong></div>
+                <div className="text-slate-600 font-mono">Password: <strong>admin</strong></div>
                 <div className="text-[10px] text-blue-600 mt-1 font-sans">Akses penuh ke semua menu &amp; pengaturan</div>
               </div>
               <div className="p-3 bg-white rounded-xl border border-slate-200">

@@ -134,7 +134,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ settings, onLoginSuccess }
             Silakan masuk menggunakan akun petugas perpustakaan yang terdaftar.
           </p>
           <p className="text-[11px] text-slate-400 mt-1 font-mono">
-            Default Admin: <span className="font-semibold text-slate-600">admin</span> / <span className="font-semibold text-slate-600">admin123</span>
+            Default Admin: <span className="font-semibold text-slate-600">admin</span> / <span className="font-semibold text-slate-600">admin</span>
           </p>
         </div>
       </div>

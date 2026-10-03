@@ -1,0 +1,155 @@
+{
+  "entities": {
+    "Settings": {
+      "title": "Settings",
+      "description": "Pengaturan identitas sekolah, perpustakaan, kepala sekolah, dan aturan denda",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nama_sekolah": { "type": "string" },
+        "nama_perpustakaan": { "type": "string" },
+        "alamat": { "type": "string" },
+        "telepon": { "type": "string" },
+        "email": { "type": "string" },
+        "logo": { "type": "string" },
+        "nama_kepala_sekolah": { "type": "string" },
+        "nip_kepala_sekolah": { "type": "string" },
+        "nama_petugas": { "type": "string" },
+        "nip_petugas": { "type": "string" },
+        "maksimal_peminjaman": { "type": "number" },
+        "lama_peminjaman": { "type": "number" },
+        "denda_per_hari": { "type": "number" },
+        "format_kode_transaksi": { "type": "string" }
+      }
+    },
+    "Book": {
+      "title": "Book",
+      "description": "Koleksi buku perpustakaan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "kode_buku": { "type": "string" },
+        "judul": { "type": "string" },
+        "pengarang": { "type": "string" },
+        "penerbit": { "type": "string" },
+        "tahun": { "type": "number" },
+        "isbn": { "type": "string" },
+        "kategori_id": { "type": "string" },
+        "rak": { "type": "string" },
+        "stok_total": { "type": "number" },
+        "stok_tersedia": { "type": "number" },
+        "deskripsi": { "type": "string" },
+        "cover_url": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "kode_buku", "judul", "stok_total"]
+    },
+    "Member": {
+      "title": "Member",
+      "description": "Data anggota pemustaka (siswa & guru)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "kode_anggota": { "type": "string" },
+        "nis": { "type": "string" },
+        "nama": { "type": "string" },
+        "kelas": { "type": "string" },
+        "telepon": { "type": "string" },
+        "alamat": { "type": "string" },
+        "foto": { "type": "string" },
+        "status": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "kode_anggota", "nama"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Kategori klasifikasi buku",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nama": { "type": "string" },
+        "deskripsi": { "type": "string" }
+      },
+      "required": ["id", "nama"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Transaksi sirkulasi peminjaman & pengembalian buku",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "kode_transaksi": { "type": "string" },
+        "anggota_id": { "type": "string" },
+        "petugas_id": { "type": "string" },
+        "tanggal_pinjam": { "type": "string" },
+        "tanggal_jatuh_tempo": { "type": "string" },
+        "tanggal_kembali": { "type": "string" },
+        "status": { "type": "string" },
+        "total_denda": { "type": "number" },
+        "denda_terbayar": { "type": "number" },
+        "status_denda": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "kode_transaksi", "anggota_id"]
+    },
+    "TransactionDetail": {
+      "title": "TransactionDetail",
+      "description": "Rincian eksemplar buku per transaksi peminjaman",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "transaksi_id": { "type": "string" },
+        "buku_id": { "type": "string" },
+        "status_buku": { "type": "string" },
+        "denda_item": { "type": "number" }
+      },
+      "required": ["id", "transaksi_id", "buku_id"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Akun login petugas dan administrator perpustakaan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "nama": { "type": "string" },
+        "role": { "type": "string" },
+        "status": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "username", "role"]
+    }
+  },
+  "firestore": {
+    "/settings/{settingId}": {
+      "schema": "Settings",
+      "description": "Pengaturan umum dan identitas sekolah"
+    },
+    "/books/{bookId}": {
+      "schema": "Book",
+      "description": "Koleksi buku perpustakaan"
+    },
+    "/members/{memberId}": {
+      "schema": "Member",
+      "description": "Data pemustaka dan kartu siswa"
+    },
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Kategori buku"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Header transaksi sirkulasi"
+    },
+    "/transaction_details/{detailId}": {
+      "schema": "TransactionDetail",
+      "description": "Detail buku yang dipinjam"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Akun pengguna sistem"
+    }
+  }
+}

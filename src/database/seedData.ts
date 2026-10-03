@@ -41,7 +41,7 @@ export const SEED_USERS_RAW: (Omit<User, 'password'> & { rawPassword: string })[
   {
     id: 'usr-1',
     username: 'admin',
-    rawPassword: 'admin123',
+    rawPassword: 'admin',
     nama: 'Administrator',
     role: 'ADMIN',
     status: 'Aktif',
